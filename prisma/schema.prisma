@@ -1,0 +1,187 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  customer
+  seller
+  admin
+}
+
+enum OrderStatus {
+  pending
+  paid
+  shipped
+  completed
+  cancelled
+}
+
+enum PaymentStatus {
+  pending
+  success
+  failed
+  refunded
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         Role     @default(customer)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  seller    Seller?
+  addresses Address[]
+  cart      Cart?
+  orders    Order[]
+  reviews   Review[]
+
+  @@map("users")
+}
+
+model Seller {
+  id              String   @id @default(uuid())
+  userId          String   @unique @map("user_id")
+  shopName        String   @map("shop_name")
+  shopDescription String?  @map("shop_description")
+  verified        Boolean  @default(false)
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  products Product[]
+
+  @@map("sellers")
+}
+
+model Address {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  addressLine String   @map("address_line")
+  city        String
+  postalCode  String   @map("postal_code")
+  isDefault   Boolean  @default(false) @map("is_default")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders Order[]
+
+  @@map("addresses")
+}
+
+model Category {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+
+  products Product[]
+
+  @@map("categories")
+}
+
+model Product {
+  id            String   @id @default(uuid())
+  sellerId      String   @map("seller_id")
+  categoryId    String   @map("category_id")
+  name          String
+  description   String?
+  price         Decimal  @db.Decimal(10, 2)
+  originalPrice Decimal? @map("original_price") @db.Decimal(10, 2)
+  isSale        Boolean  @default(false) @map("is_sale")
+  stock         Int      @default(0)
+  imageUrl      String?  @map("image_url")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  seller     Seller      @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  category   Category    @relation(fields: [categoryId], references: [id])
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+  reviews    Review[]
+
+  @@map("products")
+}
+
+model Cart {
+  id         String   @id @default(uuid())
+  customerId String   @unique @map("customer_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  customer User       @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  items    CartItem[]
+
+  @@map("carts")
+}
+
+model CartItem {
+  id        String @id @default(uuid())
+  cartId    String @map("cart_id")
+  productId String @map("product_id")
+  quantity  Int    @default(1)
+
+  cart    Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([cartId, productId])
+  @@map("cart_items")
+}
+
+model Order {
+  id          String      @id @default(uuid())
+  customerId  String      @map("customer_id")
+  addressId   String      @map("address_id")
+  totalAmount Decimal     @map("total_amount") @db.Decimal(10, 2)
+  status      OrderStatus @default(pending)
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  customer User        @relation(fields: [customerId], references: [id])
+  address  Address     @relation(fields: [addressId], references: [id])
+  items    OrderItem[]
+  payment  Payment?
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String  @id @default(uuid())
+  orderId   String  @map("order_id")
+  productId String  @map("product_id")
+  quantity  Int
+  price     Decimal @db.Decimal(10, 2)
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@map("order_items")
+}
+
+model Payment {
+  id      String        @id @default(uuid())
+  orderId String        @unique @map("order_id")
+  method  String
+  amount  Decimal       @db.Decimal(10, 2)
+  status  PaymentStatus @default(pending)
+  paidAt  DateTime?     @map("paid_at")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("payments")
+}
+
+model Review {
+  id         String   @id @default(uuid())
+  productId  String   @map("product_id")
+  customerId String   @map("customer_id")
+  rating     Int
+  comment    String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  product  Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  customer User    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@map("reviews")
+}
